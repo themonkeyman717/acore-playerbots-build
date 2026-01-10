@@ -16,7 +16,9 @@ jobs:
             apt-get install -y --no-install-recommends \
               ca-certificates git build-essential cmake ninja-build pkg-config \
               libssl-dev zlib1g-dev libbz2-dev libreadline-dev libncurses-dev \
-              libboost-all-dev libmariadb-dev libcurl4-openssl-dev libgmp-dev
+              libboost-all-dev \
+              default-libmysqlclient-dev libmariadb-dev mariadb-client \
+              libcurl4-openssl-dev libgmp-dev
 
             rm -rf /work/src /work/stage
             git clone https://github.com/mod-playerbots/azerothcore-wotlk.git --branch=Playerbot --single-branch /work/src
@@ -38,10 +40,13 @@ jobs:
             mkdir -p /work/stage
             DESTDIR=/work/stage ninja install
 
-            # sanity check: must contain the installed tree
-            ls -lah /work/stage/opt/azerothcore || true
+            # Hard checks so the workflow fails if install is empty
             test -f /work/stage/opt/azerothcore/bin/worldserver
             test -f /work/stage/opt/azerothcore/bin/authserver
+
+            echo "Installed files:"
+            ls -lah /work/stage/opt/azerothcore/bin || true
+            ls -lah /work/stage/opt/azerothcore/modules || true
           '
 
       - name: Upload staged install as artifact
