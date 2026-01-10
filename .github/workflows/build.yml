@@ -1,4 +1,4 @@
-name: Build AzerothCore Playerbot (Debian 12)
+name: Build AzerothCore Playerbots (Artifact Only)
 
 on:
   workflow_dispatch:
@@ -6,14 +6,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout (empty is fine)
-        uses: actions/checkout@v4
-
-      - name: Build in Debian 12 container
+      - name: Build in Debian 12 container and stage install
         run: |
           set -eux
           docker run --rm -v "$PWD:/work" -w /work debian:12 bash -lc '
@@ -21,12 +16,9 @@ jobs:
             apt-get install -y --no-install-recommends \
               ca-certificates git build-essential cmake ninja-build pkg-config \
               libssl-dev zlib1g-dev libbz2-dev libreadline-dev libncurses-dev \
-              libboost-all-dev libmariadb-dev libcurl4-openssl-dev libgmp-dev \
-              unzip curl
+              libboost-all-dev libmariadb-dev libcurl4-openssl-dev libgmp-dev
 
-            rm -rf /work/src /work/stage /work/acore-playerbots-install.tgz
-
-            # Core fork/branch for playerbots
+            rm -rf /work/src /work/stage
             git clone https://github.com/mod-playerbots/azerothcore-wotlk.git --branch=Playerbot --single-branch /work/src
             rm -rf /work/src/modules/mod-playerbots
             git clone https://github.com/mod-playerbots/mod-playerbots.git /work/src/modules/mod-playerbots
@@ -43,26 +35,17 @@ jobs:
 
             ninja
 
-            # Install into /work/stage (so we can package it)
+            mkdir -p /work/stage
             DESTDIR=/work/stage ninja install
 
-            # Package the exact install tree
-            cd /work/stage
-            tar -czf /work/acore-playerbots-install.tgz .
-            ls -lh /work/acore-playerbots-install.tgz
+            # sanity check: must contain the installed tree
+            ls -lah /work/stage/opt/azerothcore || true
+            test -f /work/stage/opt/azerothcore/bin/worldserver
+            test -f /work/stage/opt/azerothcore/bin/authserver
           '
 
-      - name: Upload artifact (Actions)
+      - name: Upload staged install as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: acore-playerbots-install
-          path: acore-playerbots-install.tgz
-
-      - name: Create GitHub Release with artifact
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: build-${{ github.run_number }}
-          files: acore-playerbots-install.tgz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: acore-stage
+          path: stage/
