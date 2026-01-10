@@ -1,0 +1,61 @@
+name: Build AzerothCore Playerbot (Debian 12)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo (empty is fine)
+        uses: actions/checkout@v4
+
+      - name: Build in Debian 12 container
+        run: |
+          set -eux
+          docker run --rm -v "$PWD:/work" -w /work debian:12 bash -lc '
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              ca-certificates git build-essential cmake ninja-build pkg-config \
+              libssl-dev zlib1g-dev libbz2-dev libreadline-dev libncurses-dev \
+              libboost-all-dev libmariadb-dev libcurl4-openssl-dev libgmp-dev \
+              unzip curl
+
+            # clone Playerbot-compatible core + module (required)
+            rm -rf azerothcore-wotlk
+            git clone https://github.com/mod-playerbots/azerothcore-wotlk.git --branch=Playerbot --single-branch
+            cd azerothcore-wotlk
+            rm -rf modules/mod-playerbots
+            git clone https://github.com/mod-playerbots/mod-playerbots.git --branch=master modules/mod-playerbots
+
+            mkdir -p build
+            cd build
+
+            cmake .. -GNinja \
+              -DCMAKE_INSTALL_PREFIX=/opt/azerothcore \
+              -DMODULES=dynamic \
+              -DSCRIPTS=static \
+              -DTOOLS=0 \
+              -DENABLE_PCH=OFF
+
+            ninja
+
+            rm -rf /work/out
+            mkdir -p /work/out
+            DESTDIR=/work/out ninja install
+
+            cd /work/out
+            tar -czf /work/acore-playerbots-install.tgz .
+          '
+
+      - name: Create GitHub Release with artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: build-${{ github.run_number }}
+          files: acore-playerbots-install.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
