@@ -14,6 +14,15 @@ jobs:
           docker run --rm -v "$PWD:/work" -w /work debian:12 bash -lc '
             set -euxo pipefail
 
+            # Put temp files on /work (bigger) instead of /tmp
+            mkdir -p /work/tmp
+            export TMPDIR=/work/tmp
+            export TEMP=/work/tmp
+            export TMP=/work/tmp
+
+            # Also clear container /tmp just in case
+            rm -rf /tmp/* || true
+
             # ----------------------------
             # Base build deps
             # ----------------------------
@@ -25,10 +34,7 @@ jobs:
               libboost-all-dev libcurl4-openssl-dev libgmp-dev
 
             # ----------------------------
-            # Oracle MySQL 8 dev headers
-            #
-            # MySQL repo key is currently rejected in CI (EXPKEYSIG),
-            # so we mark repo as trusted ONLY for this CI container.
+            # Oracle MySQL 8 dev headers (trusted repo in CI)
             # ----------------------------
             echo "deb [trusted=yes] http://repo.mysql.com/apt/debian/ bookworm mysql-8.0" \
               > /etc/apt/sources.list.d/mysql.list
@@ -51,7 +57,7 @@ jobs:
             git clone https://github.com/mod-playerbots/mod-playerbots.git /work/src/modules/mod-playerbots
 
             # ----------------------------
-            # Build (avoid PCH + force include <utility> for std::exchange)
+            # Build
             # ----------------------------
             mkdir -p /work/src/build
             cd /work/src/build
@@ -64,7 +70,8 @@ jobs:
               -DCMAKE_CXX_FLAGS="-include utility -Wno-error -Wno-stringop-overread" \
               -DCMAKE_C_FLAGS="-Wno-error"
 
-            ninja
+            # Build with limited parallelism to reduce temp pressure
+            ninja -j2
 
             # ----------------------------
             # Stage install for artifact
@@ -72,7 +79,6 @@ jobs:
             mkdir -p /work/stage
             DESTDIR=/work/stage ninja install
 
-            # Hard checks (fail if missing)
             test -f /work/stage/opt/azerothcore/bin/worldserver
             test -f /work/stage/opt/azerothcore/bin/authserver
             ls -lah /work/stage/opt/azerothcore/bin
