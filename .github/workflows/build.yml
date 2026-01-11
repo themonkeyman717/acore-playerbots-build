@@ -35,7 +35,7 @@ jobs:
               -DMODULES=dynamic \
               -DSCRIPTS=static \
               -DENABLE_PCH=OFF \
-              -DCMAKE_CXX_FLAGS="-Wno-error -Wno-stringop-overread" \
+              -DCMAKE_CXX_FLAGS="-include utility -Wno-error -Wno-stringop-overread" \
               -DCMAKE_C_FLAGS="-Wno-error"
 
             ninja
