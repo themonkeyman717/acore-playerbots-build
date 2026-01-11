@@ -15,16 +15,13 @@ jobs:
             set -eux
             apt-get update
 
-            # install deps + mysql dev so CMake finds MYSQL_INCLUDE_DIR
+            # install deps (MariaDB dev replaces MySQL dev on Debian 12)
             apt-get install -y --no-install-recommends \
               ca-certificates git build-essential cmake ninja-build pkg-config \
               libssl-dev zlib1g-dev libbz2-dev libreadline-dev libncurses-dev \
               libboost-all-dev libcurl4-openssl-dev libgmp-dev \
-              default-mysql-client default-mysql-server libmysqlclient-dev
-
-            # sanity: show mysql headers exist
-            ls -lah /usr/include/mysql || true
-            which mysql_config || true
+              default-mysql-client default-mysql-server \
+              libmariadb-dev libmariadb-dev-compat
 
             rm -rf /work/src /work/stage
             git clone https://github.com/mod-playerbots/azerothcore-wotlk.git --branch=Playerbot --single-branch /work/src
@@ -44,7 +41,7 @@ jobs:
             mkdir -p /work/stage
             DESTDIR=/work/stage ninja install
 
-            # hard checks: fail if install is missing
+            # hard checks
             test -f /work/stage/opt/azerothcore/bin/worldserver
             test -f /work/stage/opt/azerothcore/bin/authserver
             ls -lah /work/stage/opt/azerothcore/bin
