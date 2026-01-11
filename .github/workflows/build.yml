@@ -13,12 +13,20 @@ jobs:
           set -eux
           docker run --rm -v "$PWD:/work" -w /work debian:12 bash -lc '
             apt-get update
+
+            # install deps + BOTH mysql dev options
             apt-get install -y --no-install-recommends \
               ca-certificates git build-essential cmake ninja-build pkg-config \
               libssl-dev zlib1g-dev libbz2-dev libreadline-dev libncurses-dev \
               libboost-all-dev \
-              default-libmysqlclient-dev libmariadb-dev mariadb-client \
+              default-libmysqlclient-dev libmysqlclient-dev \
+              libmariadb-dev mariadb-client \
               libcurl4-openssl-dev libgmp-dev
+
+            # show that mysql headers exist (debug)
+            dpkg -L default-libmysqlclient-dev | head -n 40 || true
+            dpkg -L libmysqlclient-dev | head -n 40 || true
+            ls -lah /usr/include/mysql || true
 
             rm -rf /work/src /work/stage
             git clone https://github.com/mod-playerbots/azerothcore-wotlk.git --branch=Playerbot --single-branch /work/src
@@ -32,19 +40,15 @@ jobs:
               -DCMAKE_INSTALL_PREFIX=/opt/azerothcore \
               -DMODULES=dynamic \
               -DSCRIPTS=static \
-              -DTOOLS=0 \
-              -DENABLE_PCH=OFF
+              -DTOOLS=0
 
             ninja
 
             mkdir -p /work/stage
             DESTDIR=/work/stage ninja install
 
-            # Hard checks so the workflow fails if install is empty
             test -f /work/stage/opt/azerothcore/bin/worldserver
             test -f /work/stage/opt/azerothcore/bin/authserver
-
-            echo "Installed files:"
             ls -lah /work/stage/opt/azerothcore/bin || true
             ls -lah /work/stage/opt/azerothcore/modules || true
           '
