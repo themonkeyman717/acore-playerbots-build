@@ -16,22 +16,24 @@ jobs:
 
             apt-get update
             apt-get install -y --no-install-recommends \
-              ca-certificates curl wget gnupg lsb-release \
+              ca-certificates curl wget gnupg \
               git build-essential cmake ninja-build pkg-config \
               libssl-dev zlib1g-dev libbz2-dev libreadline-dev libncurses-dev \
               libboost-all-dev libcurl4-openssl-dev libgmp-dev
 
-            # ---- Install ORACLE MySQL 8 dev headers (NOT MariaDB headers) ----
-            # Add MySQL APT repo for Debian 12 (bookworm)
-            mkdir -p /etc/apt/keyrings
-            curl -fsSL https://repo.mysql.com/RPM-GPG-KEY-mysql-2023 | gpg --dearmor -o /etc/apt/keyrings/mysql.gpg
-            echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ bookworm mysql-8.0" > /etc/apt/sources.list.d/mysql.list
+            # ---- Install Oracle MySQL APT repo the official way (brings correct key) ----
+            cd /tmp
+            wget -q https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb -O mysql-apt-config.deb
+
+            # Auto-select mysql-8.0 repo (no interactive prompts)
+            DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config.deb || true
+            apt-get -f install -y
 
             apt-get update
-            apt-get install -y --no-install-recommends \
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               libmysqlclient-dev default-mysql-client
 
-            # sanity: show headers exist
+            # sanity: mysql headers exist
             ls -lah /usr/include/mysql || true
             mysql_config --version || true
 
@@ -59,7 +61,6 @@ jobs:
             mkdir -p /work/stage
             DESTDIR=/work/stage ninja install
 
-            # hard checks
             test -f /work/stage/opt/azerothcore/bin/worldserver
             test -f /work/stage/opt/azerothcore/bin/authserver
             ls -lah /work/stage/opt/azerothcore/bin
