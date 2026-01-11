@@ -12,8 +12,11 @@ jobs:
         run: |
           set -eux
           docker run --rm -v "$PWD:/work" -w /work debian:12 bash -lc '
-            set -eux
+            set -euxo pipefail
 
+            # ----------------------------
+            # Base build deps
+            # ----------------------------
             apt-get update
             apt-get install -y --no-install-recommends \
               ca-certificates curl wget gnupg lsb-release \
@@ -21,31 +24,35 @@ jobs:
               libssl-dev zlib1g-dev libbz2-dev libreadline-dev libncurses-dev \
               libboost-all-dev libcurl4-openssl-dev libgmp-dev
 
-            # --- Install MySQL APT repo (official) and select mysql-8.0 ---
-            cd /tmp
-            wget -q https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb -O mysql-apt-config.deb
+            # ----------------------------
+            # Oracle MySQL 8 dev headers
+            #
+            # MySQL repo key is currently rejected in CI (EXPKEYSIG),
+            # so we mark repo as trusted ONLY for this CI container.
+            # ----------------------------
+            echo "deb [trusted=yes] http://repo.mysql.com/apt/debian/ bookworm mysql-8.0" \
+              > /etc/apt/sources.list.d/mysql.list
 
-            # Preseed: select mysql-8.0 repo, disable others prompts
-            export DEBIAN_FRONTEND=noninteractive
-            dpkg -i mysql-apt-config.deb
+            apt-get update -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true
 
-            apt-get update
-
-            # Now Oracle MySQL dev headers should exist
             apt-get install -y --no-install-recommends \
-              libmysqlclient-dev default-mysql-client
+              default-mysql-client libmysqlclient-dev
 
             # sanity
             ls -lah /usr/include/mysql || true
             mysql_config --version || true
 
-            # ---- Fetch source ----
+            # ----------------------------
+            # Fetch source
+            # ----------------------------
             rm -rf /work/src /work/stage
             git clone https://github.com/mod-playerbots/azerothcore-wotlk.git --branch=Playerbot --single-branch /work/src
             rm -rf /work/src/modules/mod-playerbots
             git clone https://github.com/mod-playerbots/mod-playerbots.git /work/src/modules/mod-playerbots
 
-            # ---- Build ----
+            # ----------------------------
+            # Build (avoid PCH + force include <utility> for std::exchange)
+            # ----------------------------
             mkdir -p /work/src/build
             cd /work/src/build
 
@@ -59,10 +66,13 @@ jobs:
 
             ninja
 
-            # ---- Stage install for artifact ----
+            # ----------------------------
+            # Stage install for artifact
+            # ----------------------------
             mkdir -p /work/stage
             DESTDIR=/work/stage ninja install
 
+            # Hard checks (fail if missing)
             test -f /work/stage/opt/azerothcore/bin/worldserver
             test -f /work/stage/opt/azerothcore/bin/authserver
             ls -lah /work/stage/opt/azerothcore/bin
