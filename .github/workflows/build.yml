@@ -12,21 +12,19 @@ jobs:
         run: |
           set -eux
           docker run --rm -v "$PWD:/work" -w /work debian:12 bash -lc '
+            set -eux
             apt-get update
 
-            # install deps + BOTH mysql dev options
+            # install deps + mysql dev so CMake finds MYSQL_INCLUDE_DIR
             apt-get install -y --no-install-recommends \
               ca-certificates git build-essential cmake ninja-build pkg-config \
               libssl-dev zlib1g-dev libbz2-dev libreadline-dev libncurses-dev \
-              libboost-all-dev \
-              default-libmysqlclient-dev libmysqlclient-dev \
-              libmariadb-dev mariadb-client \
-              libcurl4-openssl-dev libgmp-dev
+              libboost-all-dev libcurl4-openssl-dev libgmp-dev \
+              default-mysql-client default-mysql-server libmysqlclient-dev
 
-            # show that mysql headers exist (debug)
-            dpkg -L default-libmysqlclient-dev | head -n 40 || true
-            dpkg -L libmysqlclient-dev | head -n 40 || true
+            # sanity: show mysql headers exist
             ls -lah /usr/include/mysql || true
+            which mysql_config || true
 
             rm -rf /work/src /work/stage
             git clone https://github.com/mod-playerbots/azerothcore-wotlk.git --branch=Playerbot --single-branch /work/src
@@ -39,18 +37,17 @@ jobs:
             cmake .. -GNinja \
               -DCMAKE_INSTALL_PREFIX=/opt/azerothcore \
               -DMODULES=dynamic \
-              -DSCRIPTS=static \
-              -DTOOLS=0
+              -DSCRIPTS=static
 
             ninja
 
             mkdir -p /work/stage
             DESTDIR=/work/stage ninja install
 
+            # hard checks: fail if install is missing
             test -f /work/stage/opt/azerothcore/bin/worldserver
             test -f /work/stage/opt/azerothcore/bin/authserver
-            ls -lah /work/stage/opt/azerothcore/bin || true
-            ls -lah /work/stage/opt/azerothcore/modules || true
+            ls -lah /work/stage/opt/azerothcore/bin
           '
 
       - name: Upload staged install as artifact
